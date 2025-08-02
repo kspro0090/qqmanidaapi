@@ -7,6 +7,7 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
 import os
 from functools import wraps
+import secrets
 
 def append_to_sheet(data_list):
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -20,23 +21,35 @@ app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-product
 
 # Database Migration Function
 def migrate_database():
-    """Automatically add missing columns to violation_reports table"""
+    """Automatically add missing columns/tables"""
     conn = sqlite3.connect('system.db')
     c = conn.cursor()
-    
+
     try:
-        # Check if manager_notes column exists
+        # Check if manager_notes and notes columns exist in violation_reports
         c.execute("PRAGMA table_info(violation_reports)")
         columns = [column[1] for column in c.fetchall()]
-        
+
         if 'manager_notes' not in columns:
             c.execute("ALTER TABLE violation_reports ADD COLUMN manager_notes TEXT")
             print("✅ Added manager_notes column to violation_reports table")
-        
+
         if 'notes' not in columns:
             c.execute("ALTER TABLE violation_reports ADD COLUMN notes TEXT")
             print("✅ Added notes column to violation_reports table")
-        
+
+        # Create api_keys table if it doesn't exist
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT UNIQUE,
+                name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
         conn.commit()
     except Exception as e:
         print(f"⚠️ Migration error (may be normal if columns already exist): {e}")
@@ -45,6 +58,9 @@ def migrate_database():
 
 # Run migration on app startup
 migrate_database()
+
+from api import api
+app.register_blueprint(api)
 
 # Authentication decorators
 def admin_required(f):
@@ -3174,6 +3190,7 @@ def admin_panel():
                         <a href="/admin/violations" class="btn btn-outline-warning me-2">
                             <i class="bi bi-exclamation-triangle me-2"></i>مدیریت تخلفات
                         </a>
+                        <a href="/admin/generate_api_key"><button>🔑 تولید API Key جدید</button></a>
                         <a href="/admin/logout" class="btn btn-outline-danger">
                             <i class="bi bi-box-arrow-right me-2"></i>خروج
                         </a>
@@ -3564,6 +3581,35 @@ def admin_panel():
         pending_violation_reports=pending_violation_reports,
         manager_violation_stats=manager_violation_stats,
         violation_admins=violation_admins
+    )
+
+
+@app.route('/admin/generate_api_key')
+@admin_required
+def generate_api_key():
+    """Generate a new API key and display it once."""
+    conn = sqlite3.connect('system.db')
+    c = conn.cursor()
+    new_key = secrets.token_hex(32)
+    c.execute("INSERT INTO api_keys (key, name) VALUES (?, ?)", (new_key, 'Generated'))
+    conn.commit()
+    conn.close()
+    return render_template_string(
+        '''
+        <!DOCTYPE html>
+        <html lang="fa" dir="rtl">
+        <head>
+            <meta charset="UTF-8">
+            <title>کلید API جدید</title>
+        </head>
+        <body style="font-family: sans-serif; direction: rtl; text-align: center; padding-top: 50px;">
+            <h3>کلید API شما:</h3>
+            <p style="direction:ltr;">{{ key }}</p>
+            <a href="/admin/panel">بازگشت به پنل</a>
+        </body>
+        </html>
+        ''',
+        key=new_key,
     )
 
 @app.route('/admin/violations', methods=['GET', 'POST'])

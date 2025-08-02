@@ -24,6 +24,7 @@ def _is_key_valid(key: str) -> bool:
 
 @api.route('/api/departments', methods=['GET'])
 def api_departments():
+    """Return list of departments (id and name). Requires valid API key."""
     api_key = _get_key_from_header()
     if not _is_key_valid(api_key):
         return jsonify({'error': 'Unauthorized'}), 401
@@ -38,6 +39,7 @@ def api_departments():
 
 @api.route('/api/questions', methods=['POST'])
 def api_questions():
+    """Create a new question after validating department and required fields."""
     api_key = _get_key_from_header()
     if not _is_key_valid(api_key):
         return jsonify({'error': 'Unauthorized'}), 401

@@ -3587,6 +3587,7 @@ def admin_panel():
 @app.route('/admin/generate_api_key')
 @admin_required
 def generate_api_key():
+    """Generate a new API key and display it once."""
     conn = sqlite3.connect('system.db')
     c = conn.cursor()
     new_key = secrets.token_hex(32)
